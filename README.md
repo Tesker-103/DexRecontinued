@@ -1,5 +1,7 @@
 # Dex Recontinued
 
+<img width="1378" height="768" alt="nonups" src="https://github.com/user-attachments/assets/fe689f73-cc30-4e91-9ccd-2acf47769d44" />
+
 ## About
 Dex Recontinued is a revival of old dex which was discontinued, this version includes many of the things that were in the original dexs roadmap
 
