@@ -9,6 +9,12 @@ This version will try to provide more tools than any other explorer, making it t
 
 thanks to https://github.com/AZYsGithub/DexPlusPlus/ for some of the things i used in this explorer
 
+## Script
+
+```lua
+loadstring(game:HttpGet("https://github.com/Tesker-103/DexRecontinued/releases/latest/download/out.lua"))()
+```
+
 ## Features
 idk if i remember all of them correctly
 
