@@ -1111,6 +1111,8 @@ Serializer = (function()
 	=== DexSerializer SaveInstance ===
 	
 	Thank you for using DexSerializer!
+
+	-- Saved with https://github.com/Tesker-103/DexRecontinued/
 	
 	IMPORTANT NOTES:
 	- Save your game immediately (Use File > Save As) to take advantage of the chosen format.
