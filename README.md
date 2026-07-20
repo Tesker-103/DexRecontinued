@@ -16,20 +16,21 @@ loadstring(game:HttpGet("https://github.com/Tesker-103/DexRecontinued/releases/l
 ```
 
 ## Features
-idk if i remember all of them correctly
-
-- Data Explorer app, lets you search garbage collection for const, upvals, etc, and allow for easy modification, and provides a detailed view of the function when clicked on
-- Script Environment viewer on right click context action menu for script instances, shows all global funcs, local funcs, and tables if any
+- Data Explorer app, lets you search garbage collection for const, upvals, etc, or specific function address/hashes and allows for easy modification, and provides a detailed view of the function when clicked on
+- Script Environment viewer on right clicking script instances to show up the context menu action, shows all global funcs, local funcs, and tables if any
 - Thread Explorer app, lets you view all active ingame threads currently running
-- Debugging Interface app, lets you hook any Function/Event/Method/Signal or Property to change its intended behaviour (select any instance in the explorer to see it in action)
-- Search Filters, you can do stuff like Name="Something" in the searchbar and itll show you all instances with name "Something"
-- Autocomplete in the search bar !
+- Debugging Interface app, lets you hook any Function/Event/Method/Signal or Property to change its intended behaviour (select any instance in the explorer to see it in action), It also has a tree view
+- Search Filters, you can do stuff like Name="Something" in the searchbar and it'll show you all instances with name "Something"
+- Autocomplete in the search bar
 - Copy button besides properties to be pasted into luau
-- more....
+- More Customization Features, Less Detected
+& More...
 
 ## Note
 many things might not work as intended, i havent tested everything properly, let me know if something doesnt work
 
 xeno & solara unsupported with many things in this explorer, so use https://ldplayer.net, thx
 
-let me know in my discord https://discord.gg/xGucmFjGVD
+let me know in my discord
+
+[![Join us on Discord](https://invidget.switchblade.xyz/1371555692661706793?theme=dark)](https://discord.gg/xGucmFjGVD)
