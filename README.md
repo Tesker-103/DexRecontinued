@@ -29,8 +29,8 @@ loadstring(game:HttpGet("https://github.com/Tesker-103/DexRecontinued/releases/l
 ## Note
 many things might not work as intended, i havent tested everything properly, let me know if something doesnt work
 
-xeno & solara unsupported with many things in this explorer, so use https://ldplayer.net, thx
+xeno & solara are unsupported with many things in this explorer, so use https://ldplayer.net, thx
 
 let me know in my discord
 
-[![Join us on Discord](https://invidget.switchblade.xyz/1371555692661706793?theme=dark)](https://discord.gg/xGucmFjGVD)
+[![Discord](https://img.shields.io/discord/1371555692661706793?style=for-the-badge&logo=discord&logoColor=white&color=5865F2)](https://discord.gg/xGucmFjGVD)
