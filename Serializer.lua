@@ -1329,9 +1329,9 @@ Serializer = (function()
 		["CFrame"] = function(objs,name,func)
 			local szObjs = #objs
 			local temp = b_create(36)
-			local typeBuf = b_create(szObjs)
-			local matBuf = b_create(36 * szObjs)
-			local matOffset = 0
+			-- Maximum size is 1 byte ID + 36 bytes matrix + 12 bytes position per object = 49 * szObjs
+			local buf = b_create(49 * szObjs)
+			local offset = 0
 			local positions = tableCreate(szObjs)
 			local reader = func or (oldIndex and _oldIndexReader) or _fallbackReader
 			
@@ -1348,15 +1348,18 @@ Serializer = (function()
 				local mappedID = binaryCFrameMap[strKey]
 				
 				if mappedID then
-					b_writestring(typeBuf, i - 1, mappedID, 1)
+					b_writestring(buf, offset, mappedID, 1)
+					offset = offset + 1
 				else
-					b_writeu8(typeBuf, i - 1, 0)
-					b_writestring(matBuf, matOffset, strKey, 36)
-					matOffset = matOffset + 36
+					b_writeu8(buf, offset, 0)
+					b_writestring(buf, offset + 1, strKey, 36)
+					offset = offset + 37
 				end
 			end
 			
-			local posBuf = b_create(12 * szObjs)
+			local posStart = offset
+			offset = offset + 12 * szObjs
+			
 			local temp2 = b_create(4)
 			for i = 1, szObjs do
 				local pos = positions[i]
@@ -1365,25 +1368,25 @@ Serializer = (function()
 				b_writef32(temp2, 0, pos.Z); local zRot = b32_lrotate(b_readu32(temp2, 0), 1)
 				
 				local base = i - 1
-				b_writeu8(posBuf, base, b32_extract(xRot, 24, 8))
-				b_writeu8(posBuf, base + szObjs, b32_extract(xRot, 16, 8))
-				b_writeu8(posBuf, base + szObjs * 2, b32_extract(xRot, 8, 8))
-				b_writeu8(posBuf, base + szObjs * 3, b32_extract(xRot, 0, 8))
+				b_writeu8(buf, posStart + base, b32_extract(xRot, 24, 8))
+				b_writeu8(buf, posStart + base + szObjs, b32_extract(xRot, 16, 8))
+				b_writeu8(buf, posStart + base + szObjs * 2, b32_extract(xRot, 8, 8))
+				b_writeu8(buf, posStart + base + szObjs * 3, b32_extract(xRot, 0, 8))
 				
-				local yBase = 4 * szObjs + base
-				b_writeu8(posBuf, yBase, b32_extract(yRot, 24, 8))
-				b_writeu8(posBuf, yBase + szObjs, b32_extract(yRot, 16, 8))
-				b_writeu8(posBuf, yBase + szObjs * 2, b32_extract(yRot, 8, 8))
-				b_writeu8(posBuf, yBase + szObjs * 3, b32_extract(yRot, 0, 8))
+				local yBase = posStart + 4 * szObjs + base
+				b_writeu8(buf, yBase, b32_extract(yRot, 24, 8))
+				b_writeu8(buf, yBase + szObjs, b32_extract(yRot, 16, 8))
+				b_writeu8(buf, yBase + szObjs * 2, b32_extract(yRot, 8, 8))
+				b_writeu8(buf, yBase + szObjs * 3, b32_extract(yRot, 0, 8))
 				
-				local zBase = 8 * szObjs + base
-				b_writeu8(posBuf, zBase, b32_extract(zRot, 24, 8))
-				b_writeu8(posBuf, zBase + szObjs, b32_extract(zRot, 16, 8))
-				b_writeu8(posBuf, zBase + szObjs * 2, b32_extract(zRot, 8, 8))
-				b_writeu8(posBuf, zBase + szObjs * 3, b32_extract(zRot, 0, 8))
+				local zBase = posStart + 8 * szObjs + base
+				b_writeu8(buf, zBase, b32_extract(zRot, 24, 8))
+				b_writeu8(buf, zBase + szObjs, b32_extract(zRot, 16, 8))
+				b_writeu8(buf, zBase + szObjs * 2, b32_extract(zRot, 8, 8))
+				b_writeu8(buf, zBase + szObjs * 3, b32_extract(zRot, 0, 8))
 			end
 			
-			return b_tostring(typeBuf) .. b_tostring(matBuf, 0, matOffset) .. b_tostring(posBuf)
+			return b_tostring(buf, 0, offset)
 		end,
 		["Enum"] = function(objs,name,func)
 			local szObjs = #objs
@@ -1589,7 +1592,7 @@ Serializer = (function()
 				local Buf = b_create(2 + 51 * SzObjs)
 				local Offset = 0
 				
-				b_writeu8(Buf, Offset, 16); Offset += 1
+				b_writeu8(Buf, Offset, 16); Offset += 1 -- CFrame ID prefix
 				
 				local Positions = tableCreate(SzObjs)
 				local ExistsList = tableCreate(SzObjs)
@@ -2157,6 +2160,7 @@ Serializer = (function()
 			end)
 		end
 
+		-- Safety watchdog to avoid hanging forever
 		local decompTimeout = saveSettings.DecompileTimeout or DefaultSettings.Serializer.DecompileTimeout or 10
 		local maxWait = os.clock() + math.max(60, (decompTimeout * math.max(1, totalScripts)) / math.max(1, maxThreads) * 4)
 		while left > 0 do
