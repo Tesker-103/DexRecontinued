@@ -22,6 +22,7 @@ loadstring(game:HttpGet("https://github.com/Tesker-103/DexRecontinued/releases/l
 - Debugging Interface app, lets you hook any Function/Event/Method/Signal or Property to change its intended behaviour (select any instance in the explorer to see it in action), It also has a tree view
 - Search Filters, you can do stuff like Name="Something" in the searchbar and it'll show you all instances with name "Something"
 - Autocomplete in the search bar
+- Extremely fast DexRE Serializer, save games in an instant in binary format with top tier accuracy, and small file sizes
 - Copy button besides properties to be pasted into luau
 - More Customization Features, Less Detected
 & More...
