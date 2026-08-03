@@ -1339,7 +1339,7 @@ Serializer = (function()
 				local val = reader(objs[i], name)
 				positions[i] = val.Position
 				
-				local R00, R01, R02, R10, R11, R12, R20, R21, R22 = select(4, components(val))
+				local _, _, _, R00, R01, R02, R10, R11, R12, R20, R21, R22 = components(val)
 				b_writef32(temp, 0, R00) b_writef32(temp, 4, R01) b_writef32(temp, 8, R02)
 				b_writef32(temp, 12, R10) b_writef32(temp, 16, R11) b_writef32(temp, 20, R12)
 				b_writef32(temp, 24, R20) b_writef32(temp, 28, R21) b_writef32(temp, 32, R22)
@@ -1609,7 +1609,7 @@ Serializer = (function()
 					ExistsList[I] = Exists
 					Positions[I] = Val.Position
 					
-					local R00, R01, R02, R10, R11, R12, R20, R21, R22 = select(4, components(Val))
+					local _, _, _, R00, R01, R02, R10, R11, R12, R20, R21, R22 = components(Val)
 					buffer.writef32(TempCFrameBuf, 0, R00)
 					buffer.writef32(TempCFrameBuf, 4, R01)
 					buffer.writef32(TempCFrameBuf, 8, R02)
