@@ -3,10 +3,10 @@
 
 --[[
 
-    ____             ____  ______   _____           _       ___               
+    ____             ____  ______   _____           _       ___
    / __ \___  _  __ / __ \/ ____/  / ___/___  _____(_)___ _/ (_)___  ___  _____
   / / / / _ \| |/_// /_/ / __/     \__ \/ _ \/ ___/ / __ `/ / /_  / / _ \/ ___/
- / /_/ /  __/>  < / _, _/ /___    ___/ /  __/ /  / / /_/ / / / / /_/  __/ /    
+ / /_/ /  __/>  < / _, _/ /___    ___/ /  __/ /  / / /_/ / / / / /_/  __/ /
 /_____/\___/_/|_|/_/ |_/_____/   /____/\___/_/  /_/\__,_/_/_/ /___/\___/_/
 
 
@@ -31,27 +31,22 @@ local service = setmetatable({},{__index = function(self,name)
 end})
 
 -- Helper functions for new features
-local function activateSafeMode()
-	if pcall(function() game:GetService"Players".LocalPlayer:Kick("SaveInstance SafeMode: Saving initiated. Goodbye!") end) then
-	end
+local function ActivateSafeMode()
+pcall(function() game:GetService"Players".LocalPlayer:Kick("SaveInstance SafeMode: Saving initiated. Goodbye!") end)
 end
 
-local function boostFPS()
-	local success = false
-	if pcall(function()
-		local gameSettings = UserSettings():FindFirstChild("GameSettings")
-		if gameSettings then
-			gameSettings.FPSUnlocked = false
-			gameSettings.MasterVolume = 0
-			success = true
-		end
-	end) then
-		-- Try disabling rendering via camera if available
-		if workspace.CurrentCamera then
-			workspace.CurrentCamera.MaxAxisOfRotation = 0
-		end
+local function BoostFPS()
+	local s = false
+	pcall(function()
+		UserSettings().GameSettings.FPSUnlocked = false
+		UserSettings().GameSettings.MasterVolume = 0
+		game:GetService"RunService":Set3dRenderingEnabled(false)
+		s = true
+	end)
+	if workspace.CurrentCamera then
+		workspace.CurrentCamera.MaxAxisOfRotation = 0
 	end
-	return success
+	return s
 end
 
 local function ksscripts()
@@ -65,7 +60,7 @@ end
 end
 
 local antiAfkCon = nil
-local function startAntiIdle()
+local function AntiIdle()
 	 if getconnections then
         for _, c in getconnections(game:GetService"Players".LocalPlayer.Idled) do
             pcall(function() c:Disable() end)
@@ -125,7 +120,7 @@ local function cleanAnonymousData(root, options)
 			return input
 		end
 		table.insert(subStrings, string.sub(input, lastFinish + 1))
-		return table.concat(subStrings, replacement)
+		return tblconcat(subStrings, replacement)
 	end
 
 	local function ScrubValue(val)
@@ -227,7 +222,7 @@ DefaultSettings = {
 		FilePath = false,
 		Callback = false,
 		Clipboard = false,
-		AvoidFileOverwrite = true,
+		AvoidFileOverwrite = false,
 		-- Safety Features
 		SafeMode = false,
 		BoostFPS = false,
@@ -349,12 +344,6 @@ function BufferWriter.WriteInt8(Self, Value)
 	Self.Offset = Self.Offset + 1
 end
 
-function BufferWriter.WriteUInt16LE(Self, Value)
-	Self:EnsureCapacity(2)
-	BufferWriteU16(Self.Buffer, Self.Offset, Value)
-	Self.Offset = Self.Offset + 2
-end
-
 function BufferWriter.WriteUInt16BE(Self, Value)
 	Self:EnsureCapacity(2)
 	BufferWriteU8(Self.Buffer, Self.Offset, Bit32Extract(Value, 8, 8))
@@ -458,12 +447,6 @@ function BufferWriter.GetRotatedFloatBits(Self, Value)
 	return Bit32LRotate(RawBits, 1)
 end
 
-function BufferWriter.WriteFromBuffer(Self, SourceBuffer, Length, SourceOffset)
-	Self:EnsureCapacity(Length)
-	BufferCopy(Self.Buffer, Self.Offset, SourceBuffer, SourceOffset or 0, Length)
-	Self.Offset = Self.Offset + Length
-end
-
 function BufferWriter.WriteRawString(Self, Value)
 	local Length = #Value
 	Self:EnsureCapacity(Length)
@@ -506,9 +489,12 @@ Serializer = (function()
 	local components = CFrame.new(0,0,0).GetComponents
 	local httpService = service.HttpService
 	local urlEncode = httpService.UrlEncode
-	local concat = table.concat
 	local lrotate = bit32.lrotate
 	local tableCreate = table.create
+	local tblmove = table.move
+	local tostring = tostring
+	local tblsort = table.sort
+	local tblconcat = table.concat
 	local select = select
 	local unpack = unpack
 	local split = string.split
@@ -654,6 +640,7 @@ Serializer = (function()
 		["Part0Internal"] = true,
 		["Part1Internal"] = true
 		},
+
 		["BasePart"] = {
 			["Color3uint8"] = true
 		},
@@ -710,104 +697,20 @@ Serializer = (function()
 	}
 
 	local valueConverters = {
-		["bool"] = function(Objs, Name, Func)
-			local SzObjs = #Objs
-			local Writer = BufferWriter.New(SzObjs)
-			for I = 1, SzObjs do
-				local Val
-				if Func then 
-					Val = Func(Objs[I], Name) 
-				elseif oldIndex then 
-					Val = oldIndex(Objs[I], Name) 
-				else 
-					Val = Objs[I][Name] 
-				end
-				Writer:WriteUInt8(Val and 1 or 0)
-			end
-			return Writer:ToString()
+		["bool"] = function(name,val)
+			return '\n<bool name="'..name..'">'..(val and "true" or "false")..'</bool>'
 		end,
-
-		["int"] = function(Objs, Name, Func)
-			local SzObjs = #Objs
-			local Writer = BufferWriter.New(4 * SzObjs)
-			Writer:Skip(4 * SzObjs)
-			for I = 1, SzObjs do
-				local Val
-				if Func then 
-					Val = Func(Objs[I], Name) 
-				elseif oldIndex then 
-					Val = oldIndex(Objs[I], Name) 
-				else 
-					Val = Objs[I][Name] 
-				end
-				local Transformed = Val < 0 and (2 * -Val - 1) or (2 * Val)
-				Writer:WriteInterleavedUInt32(0, I - 1, SzObjs, Transformed)
-			end
-			return Writer:ToString()
+		["int"] = function(name,val)
+			return format('\n<int name="%s">%d</int>',name,val)
 		end,
-		["int64"] = function(Objs, Name, Func)
-			local SzObjs = #Objs
-			local Writer = BufferWriter.New(8 * SzObjs)
-			Writer:Skip(8 * SzObjs)
-			
-			local GetValue
-			if Func then
-				GetValue = function(Obj, PropName)
-					local Success, Res = pcall(Func, Obj, PropName)
-					return Success and Res or 0
-				end
-			elseif oldIndex then
-				GetValue = function(Obj, PropName)
-					local Success, Res = pcall(oldIndex, Obj, PropName)
-					return Success and Res or 0
-				end
-			else
-				GetValue = function(Obj, PropName)
-					local Success, Res = pcall(function() return Obj[PropName] end)
-					return Success and Res or 0
-				end
-			end
-
-			for I = 1, SzObjs do
-				local Val = GetValue(Objs[I], Name)
-				local Transformed = Val < 0 and (2 * -Val - 1) or (2 * Val)
-				Writer:WriteInterleavedUInt64(0, I - 1, SzObjs, Transformed)
-			end
-			return Writer:ToString()
+		["int64"] = function(name,val)
+			return format('\n<int64 name="%s">%s</int64>',name,tostring(val))
 		end,
-		["float"] = function(Objs, Name, Func)
-			local SzObjs = #Objs
-			local Writer = BufferWriter.New(4 * SzObjs)
-			Writer:Skip(4 * SzObjs)
-			for I = 1, SzObjs do
-				local Val
-				if Func then 
-					Val = Func(Objs[I], Name) 
-				elseif oldIndex then 
-					Val = oldIndex(Objs[I], Name) 
-				else 
-					Val = Objs[I][Name] 
-				end
-				local Rotated = Writer:GetRotatedFloatBits(Val)
-				Writer:WriteInterleavedUInt32(0, I - 1, SzObjs, Rotated)
-			end
-			return Writer:ToString()
+		["float"] = function(name,val)
+			return format('\n<float name="%s">%.12f</float>',name,val)
 		end,
-		["double"] = function(Objs, Name, Func)
-			local SzObjs = #Objs
-			local Writer = BufferWriter.New(8 * SzObjs)
-			for I = 1, SzObjs do
-				local Val
-				if Func then 
-					Val = Func(Objs[I], Name) 
-				elseif oldIndex then 
-					Val = oldIndex(Objs[I], Name) 
-				else 
-					Val = Objs[I][Name] 
-				end
-				Writer:WriteFloat64LE(Val)
-			end
-			return Writer:ToString()
+		["double"] = function(name,val)
+			return format('\n<double name="%s">%.12f</double>',name,val)
 		end,
 		["string"] = function(name,val)
 			return '\n<string name="'..name..'">'..gsub(val,xmlReplacePattern,xmlReplace)..'</string>'
@@ -818,29 +721,8 @@ Serializer = (function()
 		["Vector2"] = function(name,val)
 			return format('\n<Vector2 name="%s">\n<X>%.12f</X>\n<Y>%.12f</Y>\n</Vector2>',name,val.X,val.Y)
 		end,
-		["Vector3"] = function(Objs, Name, Func)
-			local SzObjs = #Objs
-			local Writer = BufferWriter.New(12 * SzObjs)
-			Writer:Skip(12 * SzObjs)
-			for I = 1, SzObjs do
-				local Val
-				if Func then 
-					Val = Func(Objs[I], Name) 
-				elseif oldIndex then 
-					Val = oldIndex(Objs[I], Name) 
-				else 
-					Val = Objs[I][Name] 
-				end
-				
-				local XRotated = Writer:GetRotatedFloatBits(Val.X)
-				local YRotated = Writer:GetRotatedFloatBits(Val.Y)
-				local ZRotated = Writer:GetRotatedFloatBits(Val.Z)
-				
-				Writer:WriteInterleavedUInt32(0, I - 1, SzObjs, XRotated)
-				Writer:WriteInterleavedUInt32(4 * SzObjs, I - 1, SzObjs, YRotated)
-				Writer:WriteInterleavedUInt32(8 * SzObjs, I - 1, SzObjs, ZRotated)
-			end
-			return Writer:ToString()
+		["Vector3"] = function(name,val)
+			return format('\n<Vector3 name="%s">\n<X>%.12f</X>\n<Y>%.12f</Y>\n<Z>%.12f</Z>\n</Vector3>',name,val.X,val.Y,val.Z)
 		end,
 		["Vector3int16"] = function(name,val)
 			return format('\n<Vector3int16 name="%s">\n<X>%d</X>\n<Y>%d</Y>\n<Z>%d</Z>\n</Vector3int16>',name,val.X,val.Y,val.Z)
@@ -862,29 +744,8 @@ Serializer = (function()
 			local y = val.Y
 			return format('\n<UDim2 name="%s">\n<XS>%.12f</XS>\n<XO>%d</XO>\n<YS>%.12f</YS>\n<YO>%d</YO>\n</UDim2>',name,x.Scale,x.Offset,y.Scale,y.Offset)
 		end,
-		["Color3"] = function(Objs, Name, Func)
-			local SzObjs = #Objs
-			local Writer = BufferWriter.New(12 * SzObjs)
-			Writer:Skip(12 * SzObjs)
-			for I = 1, SzObjs do
-				local Val
-				if Func then 
-					Val = Func(Objs[I], Name) 
-				elseif oldIndex then 
-					Val = oldIndex(Objs[I], Name) 
-				else 
-					Val = Objs[I][Name] 
-				end
-				
-				local RRotated = Writer:GetRotatedFloatBits(Val.R)
-				local GRotated = Writer:GetRotatedFloatBits(Val.G)
-				local BRotated = Writer:GetRotatedFloatBits(Val.B)
-				
-				Writer:WriteInterleavedUInt32(0, I - 1, SzObjs, RRotated)
-				Writer:WriteInterleavedUInt32(4 * SzObjs, I - 1, SzObjs, GRotated)
-				Writer:WriteInterleavedUInt32(8 * SzObjs, I - 1, SzObjs, BRotated)
-			end
-			return Writer:ToString()
+		["Color3"] = function(name,val)
+			return format('\n<Color3 name="%s">\n<R>%.12f</R>\n<G>%.12f</G>\n<B>%.12f</B>\n</Color3>',name,val.R,val.G,val.B)
 		end,
 		["NumberRange"] = function(name,val)
 			return '\n<NumberRange name="'..name..'">'..tostring(val)..'</NumberRange>'
@@ -895,33 +756,10 @@ Serializer = (function()
 		["ColorSequence"] = function(name,val)
 			return '\n<ColorSequence name="'..name..'">'..tostring(val)..'</ColorSequence>'
 		end,
-		["Rect"] = function(Objs, Name, Func)
-			local SzObjs = #Objs
-			local Writer = BufferWriter.New(16 * SzObjs)
-			Writer:Skip(16 * SzObjs)
-			for I = 1, SzObjs do
-				local Val
-				if Func then 
-					Val = Func(Objs[I], Name) 
-				elseif oldIndex then 
-					Val = oldIndex(Objs[I], Name) 
-				else 
-					Val = Objs[I][Name] 
-				end
-				local Min = Val.Min
-				local Max = Val.Max
-				
-				local XMinRotated = Writer:GetRotatedFloatBits(Min.X)
-				local YMinRotated = Writer:GetRotatedFloatBits(Min.Y)
-				local XMaxRotated = Writer:GetRotatedFloatBits(Max.X)
-				local YMaxRotated = Writer:GetRotatedFloatBits(Max.Y)
-				
-				Writer:WriteInterleavedUInt32(0, I - 1, SzObjs, XMinRotated)
-				Writer:WriteInterleavedUInt32(4 * SzObjs, I - 1, SzObjs, YMinRotated)
-				Writer:WriteInterleavedUInt32(8 * SzObjs, I - 1, SzObjs, XMaxRotated)
-				Writer:WriteInterleavedUInt32(12 * SzObjs, I - 1, SzObjs, YMaxRotated)
-			end
-			return Writer:ToString()
+		["Rect"] = function(name,val)
+			local min = val.Min
+			local max = val.Max
+			return format('\n<Rect2D name="%s">\n<min>\n<X>%.12f</X>\n<Y>%.12f</Y>\n</min>\n<max>\n<X>%.12f</X>\n<Y>%.12f</Y>\n</max>\n</Rect2D>',name,min.X,min.Y,max.X,max.Y)
 		end,
 		["PhysicalProperties"] = function(name,val)
 			if val then
@@ -958,6 +796,13 @@ Serializer = (function()
 		end,
 		["SecurityCapabilities"] = function(name,val)
 			return format('\n<SecurityCapabilities name="%s">%d</SecurityCapabilities>',name,val or 0)
+		end,
+		["OptionalCoordinateFrame"] = function(name,val)
+			if val then
+				return format('\n<OptionalCoordinateFrame name="%s">\n<CFrame>\n<X>%.12f</X>\n<Y>%.12f</Y>\n<Z>%.12f</Z>\n<R00>%.12f</R00>\n<R01>%.12f</R01>\n<R02>%.12f</R02>\n<R10>%.12f</R10>\n<R11>%.12f</R11>\n<R12>%.12f</R12>\n<R20>%.12f</R20>\n<R21>%.12f</R21>\n<R22>%.12f</R22>\n</CFrame>\n</OptionalCoordinateFrame>',name,components(val))
+			else
+				return '\n<OptionalCoordinateFrame name="'..name..'"></OptionalCoordinateFrame>'
+			end
 		end,
 	}
 
@@ -1143,17 +988,17 @@ Serializer = (function()
 			Writer:Skip(8 * SzObjs)
 			for I = 1, SzObjs do
 				local Val
-				if Func then 
-					Val = Func(Objs[I], Name) 
-				elseif oldIndex then 
-					Val = oldIndex(Objs[I], Name) 
-				else 
-					Val = Objs[I][Name] 
+				if Func then
+					Val = Func(Objs[I], Name)
+				elseif oldIndex then
+					Val = oldIndex(Objs[I], Name)
+				else
+					Val = Objs[I][Name]
 				end
-				
+	
 				local ScaleRotated = Writer:GetRotatedFloatBits(Val.Scale)
 				local OffsetTransformed = Val.Offset < 0 and (2 * -Val.Offset - 1) or (2 * Val.Offset)
-				
+	
 				Writer:WriteInterleavedUInt32(0, I - 1, SzObjs, ScaleRotated)
 				Writer:WriteInterleavedUInt32(4 * SzObjs, I - 1, SzObjs, OffsetTransformed)
 			end
@@ -1166,21 +1011,21 @@ Serializer = (function()
 			Writer:Skip(16 * SzObjs)
 			for I = 1, SzObjs do
 				local Val
-				if Func then 
-					Val = Func(Objs[I], Name) 
-				elseif oldIndex then 
-					Val = oldIndex(Objs[I], Name) 
-				else 
-					Val = Objs[I][Name] 
+				if Func then
+					Val = Func(Objs[I], Name)
+				elseif oldIndex then
+					Val = oldIndex(Objs[I], Name)
+				else
+					Val = Objs[I][Name]
 				end
 				local X = Val.X
 				local Y = Val.Y
-				
+	
 				local XScaleRotated = Writer:GetRotatedFloatBits(X.Scale)
 				local YScaleRotated = Writer:GetRotatedFloatBits(Y.Scale)
 				local XOffsetTransformed = X.Offset < 0 and (2 * -X.Offset - 1) or (2 * X.Offset)
 				local YOffsetTransformed = Y.Offset < 0 and (2 * -Y.Offset - 1) or (2 * Y.Offset)
-				
+	
 				Writer:WriteInterleavedUInt32(0, I - 1, SzObjs, XScaleRotated)
 				Writer:WriteInterleavedUInt32(4 * SzObjs, I - 1, SzObjs, YScaleRotated)
 				Writer:WriteInterleavedUInt32(8 * SzObjs, I - 1, SzObjs, XOffsetTransformed)
@@ -1193,16 +1038,16 @@ Serializer = (function()
 			local Writer = BufferWriter.New(24 * SzObjs)
 			for I = 1, SzObjs do
 				local Val
-				if Func then 
-					Val = Func(Objs[I], Name) 
-				elseif oldIndex then 
-					Val = oldIndex(Objs[I], Name) 
-				else 
-					Val = Objs[I][Name] 
+				if Func then
+					Val = Func(Objs[I], Name)
+				elseif oldIndex then
+					Val = oldIndex(Objs[I], Name)
+				else
+					Val = Objs[I][Name]
 				end
 				local Origin = Val.Origin
 				local Dir = Val.Direction
-				
+	
 				Writer:WriteFloat32LE(Origin.X)
 				Writer:WriteFloat32LE(Origin.Y)
 				Writer:WriteFloat32LE(Origin.Z)
@@ -1251,23 +1096,23 @@ Serializer = (function()
 			local reader = func or (oldIndex and _oldIndexReader) or _fallbackReader
 			for i = 1, szObjs do
 				local val = reader(objs[i], name)
-				
+	
 				b_writef32(temp, 0, val.R); local rRot = b32_lrotate(b_readu32(temp, 0), 1)
 				b_writef32(temp, 0, val.G); local gRot = b32_lrotate(b_readu32(temp, 0), 1)
 				b_writef32(temp, 0, val.B); local bRot = b32_lrotate(b_readu32(temp, 0), 1)
-				
+	
 				local base = i - 1
 				b_writeu8(buf, base, b32_extract(rRot, 24, 8))
 				b_writeu8(buf, base + szObjs, b32_extract(rRot, 16, 8))
 				b_writeu8(buf, base + szObjs * 2, b32_extract(rRot, 8, 8))
 				b_writeu8(buf, base + szObjs * 3, b32_extract(rRot, 0, 8))
-				
+	
 				local gBase = 4 * szObjs + base
 				b_writeu8(buf, gBase, b32_extract(gRot, 24, 8))
 				b_writeu8(buf, gBase + szObjs, b32_extract(gRot, 16, 8))
 				b_writeu8(buf, gBase + szObjs * 2, b32_extract(gRot, 8, 8))
 				b_writeu8(buf, gBase + szObjs * 3, b32_extract(gRot, 0, 8))
-				
+	
 				local bBase = 8 * szObjs + base
 				b_writeu8(buf, bBase, b32_extract(bRot, 24, 8))
 				b_writeu8(buf, bBase + szObjs, b32_extract(bRot, 16, 8))
@@ -1282,17 +1127,17 @@ Serializer = (function()
 			Writer:Skip(8 * SzObjs)
 			for I = 1, SzObjs do
 				local Val
-				if Func then 
-					Val = Func(Objs[I], Name) 
-				elseif oldIndex then 
-					Val = oldIndex(Objs[I], Name) 
-				else 
-					Val = Objs[I][Name] 
+				if Func then
+					Val = Func(Objs[I], Name)
+				elseif oldIndex then
+					Val = oldIndex(Objs[I], Name)
+				else
+					Val = Objs[I][Name]
 				end
-				
+	
 				local XRotated = Writer:GetRotatedFloatBits(Val.X)
 				local YRotated = Writer:GetRotatedFloatBits(Val.Y)
-				
+	
 				Writer:WriteInterleavedUInt32(0, I - 1, SzObjs, XRotated)
 				Writer:WriteInterleavedUInt32(4 * SzObjs, I - 1, SzObjs, YRotated)
 			end
@@ -1305,23 +1150,23 @@ Serializer = (function()
 			local reader = func or (oldIndex and _oldIndexReader) or _fallbackReader
 			for i = 1, szObjs do
 				local val = reader(objs[i], name)
-				
+	
 				b_writef32(temp, 0, val.X); local xRot = b32_lrotate(b_readu32(temp, 0), 1)
 				b_writef32(temp, 0, val.Y); local yRot = b32_lrotate(b_readu32(temp, 0), 1)
 				b_writef32(temp, 0, val.Z); local zRot = b32_lrotate(b_readu32(temp, 0), 1)
-				
+	
 				local base = i - 1
 				b_writeu8(buf, base, b32_extract(xRot, 24, 8))
 				b_writeu8(buf, base + szObjs, b32_extract(xRot, 16, 8))
 				b_writeu8(buf, base + szObjs * 2, b32_extract(xRot, 8, 8))
 				b_writeu8(buf, base + szObjs * 3, b32_extract(xRot, 0, 8))
-				
+	
 				local yBase = 4 * szObjs + base
 				b_writeu8(buf, yBase, b32_extract(yRot, 24, 8))
 				b_writeu8(buf, yBase + szObjs, b32_extract(yRot, 16, 8))
 				b_writeu8(buf, yBase + szObjs * 2, b32_extract(yRot, 8, 8))
 				b_writeu8(buf, yBase + szObjs * 3, b32_extract(yRot, 0, 8))
-				
+	
 				local zBase = 8 * szObjs + base
 				b_writeu8(buf, zBase, b32_extract(zRot, 24, 8))
 				b_writeu8(buf, zBase + szObjs, b32_extract(zRot, 16, 8))
@@ -1333,24 +1178,23 @@ Serializer = (function()
 		["CFrame"] = function(objs,name,func)
 			local szObjs = #objs
 			local temp = b_create(36)
-			-- Maximum size is 1 byte ID + 36 bytes matrix + 12 bytes position per object = 49 * szObjs
 			local buf = b_create(49 * szObjs)
 			local offset = 0
 			local positions = tableCreate(szObjs)
 			local reader = func or (oldIndex and _oldIndexReader) or _fallbackReader
-			
+	
 			for i = 1, szObjs do
 				local val = reader(objs[i], name)
 				positions[i] = val.Position
-				
+	
 				local _, _, _, R00, R01, R02, R10, R11, R12, R20, R21, R22 = components(val)
 				b_writef32(temp, 0, R00) b_writef32(temp, 4, R01) b_writef32(temp, 8, R02)
 				b_writef32(temp, 12, R10) b_writef32(temp, 16, R11) b_writef32(temp, 20, R12)
 				b_writef32(temp, 24, R20) b_writef32(temp, 28, R21) b_writef32(temp, 32, R22)
-				
+	
 				local strKey = b_tostring(temp)
 				local mappedID = binaryCFrameMap[strKey]
-				
+	
 				if mappedID then
 					b_writestring(buf, offset, mappedID, 1)
 					offset = offset + 1
@@ -1360,36 +1204,36 @@ Serializer = (function()
 					offset = offset + 37
 				end
 			end
-			
+	
 			local posStart = offset
 			offset = offset + 12 * szObjs
-			
+	
 			local temp2 = b_create(4)
 			for i = 1, szObjs do
 				local pos = positions[i]
 				b_writef32(temp2, 0, pos.X); local xRot = b32_lrotate(b_readu32(temp2, 0), 1)
 				b_writef32(temp2, 0, pos.Y); local yRot = b32_lrotate(b_readu32(temp2, 0), 1)
 				b_writef32(temp2, 0, pos.Z); local zRot = b32_lrotate(b_readu32(temp2, 0), 1)
-				
+	
 				local base = i - 1
 				b_writeu8(buf, posStart + base, b32_extract(xRot, 24, 8))
 				b_writeu8(buf, posStart + base + szObjs, b32_extract(xRot, 16, 8))
 				b_writeu8(buf, posStart + base + szObjs * 2, b32_extract(xRot, 8, 8))
 				b_writeu8(buf, posStart + base + szObjs * 3, b32_extract(xRot, 0, 8))
-				
+	
 				local yBase = posStart + 4 * szObjs + base
 				b_writeu8(buf, yBase, b32_extract(yRot, 24, 8))
 				b_writeu8(buf, yBase + szObjs, b32_extract(yRot, 16, 8))
 				b_writeu8(buf, yBase + szObjs * 2, b32_extract(yRot, 8, 8))
 				b_writeu8(buf, yBase + szObjs * 3, b32_extract(yRot, 0, 8))
-				
+	
 				local zBase = posStart + 8 * szObjs + base
 				b_writeu8(buf, zBase, b32_extract(zRot, 24, 8))
 				b_writeu8(buf, zBase + szObjs, b32_extract(zRot, 16, 8))
 				b_writeu8(buf, zBase + szObjs * 2, b32_extract(zRot, 8, 8))
 				b_writeu8(buf, zBase + szObjs * 3, b32_extract(zRot, 0, 8))
 			end
-			
+	
 			return b_tostring(buf, 0, offset)
 		end,
 		["Enum"] = function(objs,name,func)
@@ -1509,25 +1353,25 @@ Serializer = (function()
 				b_writef32(temp, 0, val.Min.Y); local y1 = b32_lrotate(b_readu32(temp, 0), 1)
 				b_writef32(temp, 0, val.Max.X); local x2 = b32_lrotate(b_readu32(temp, 0), 1)
 				b_writef32(temp, 0, val.Max.Y); local y2 = b32_lrotate(b_readu32(temp, 0), 1)
-				
+	
 				local base = i - 1
 				b_writeu8(buf, base, b32_extract(x1, 24, 8))
 				b_writeu8(buf, base + szObjs, b32_extract(x1, 16, 8))
 				b_writeu8(buf, base + szObjs * 2, b32_extract(x1, 8, 8))
 				b_writeu8(buf, base + szObjs * 3, b32_extract(x1, 0, 8))
-				
+	
 				local y1Base = 4 * szObjs + base
 				b_writeu8(buf, y1Base, b32_extract(y1, 24, 8))
 				b_writeu8(buf, y1Base + szObjs, b32_extract(y1, 16, 8))
 				b_writeu8(buf, y1Base + szObjs * 2, b32_extract(y1, 8, 8))
 				b_writeu8(buf, y1Base + szObjs * 3, b32_extract(y1, 0, 8))
-				
+	
 				local x2Base = 8 * szObjs + base
 				b_writeu8(buf, x2Base, b32_extract(x2, 24, 8))
 				b_writeu8(buf, x2Base + szObjs, b32_extract(x2, 16, 8))
 				b_writeu8(buf, x2Base + szObjs * 2, b32_extract(x2, 8, 8))
 				b_writeu8(buf, x2Base + szObjs * 3, b32_extract(x2, 0, 8))
-				
+	
 				local y2Base = 12 * szObjs + base
 				b_writeu8(buf, y2Base, b32_extract(y2, 24, 8))
 				b_writeu8(buf, y2Base + szObjs, b32_extract(y2, 16, 8))
@@ -1595,13 +1439,13 @@ Serializer = (function()
 				local SzObjs = #Objs
 				local Buf = b_create(2 + 51 * SzObjs)
 				local Offset = 0
-				
+	
 				b_writeu8(Buf, Offset, 16); Offset += 1 -- CFrame ID prefix
-				
+	
 				local Positions = tableCreate(SzObjs)
 				local ExistsList = tableCreate(SzObjs)
 				local Reader = Func or (oldIndex and _oldIndexReader) or _fallbackReader
-				
+	
 				for I = 1, SzObjs do
 					local Val = Reader(Objs[I], Name)
 					local Exists = true
@@ -1609,10 +1453,10 @@ Serializer = (function()
 						Exists = false
 						Val = CFrame.new()
 					end
-					
+	
 					ExistsList[I] = Exists
 					Positions[I] = Val.Position
-					
+	
 					local _, _, _, R00, R01, R02, R10, R11, R12, R20, R21, R22 = components(Val)
 					buffer.writef32(TempCFrameBuf, 0, R00)
 					buffer.writef32(TempCFrameBuf, 4, R01)
@@ -1623,10 +1467,10 @@ Serializer = (function()
 					buffer.writef32(TempCFrameBuf, 24, R20)
 					buffer.writef32(TempCFrameBuf, 28, R21)
 					buffer.writef32(TempCFrameBuf, 32, R22)
-					
+	
 					local StrKey = b_tostring(TempCFrameBuf)
 					local MappedID = binaryCFrameMap[StrKey]
-					
+	
 					if MappedID then
 						b_writestring(Buf, Offset, MappedID, 1)
 						Offset += 1
@@ -1636,48 +1480,48 @@ Serializer = (function()
 						Offset += 37
 					end
 				end
-				
+	
 				local PosStart = Offset
 				Offset += 12 * SzObjs
-				
+	
 				local Temp2 = b_create(4)
 				for I = 1, SzObjs do
 					local Pos = Positions[I]
 					b_writef32(Temp2, 0, Pos.X); local XRot = b32_lrotate(b_readu32(Temp2, 0), 1)
 					b_writef32(Temp2, 0, Pos.Y); local YRot = b32_lrotate(b_readu32(Temp2, 0), 1)
 					b_writef32(Temp2, 0, Pos.Z); local ZRot = b32_lrotate(b_readu32(Temp2, 0), 1)
-					
+	
 					local Base = I - 1
 					b_writeu8(Buf, PosStart + Base, b32_extract(XRot, 24, 8))
 					b_writeu8(Buf, PosStart + Base + SzObjs, b32_extract(XRot, 16, 8))
 					b_writeu8(Buf, PosStart + Base + SzObjs * 2, b32_extract(XRot, 8, 8))
 					b_writeu8(Buf, PosStart + Base + SzObjs * 3, b32_extract(XRot, 0, 8))
-					
+	
 					local YBase = PosStart + 4 * SzObjs + Base
 					b_writeu8(Buf, YBase, b32_extract(YRot, 24, 8))
 					b_writeu8(Buf, YBase + SzObjs, b32_extract(YRot, 16, 8))
 					b_writeu8(Buf, YBase + SzObjs * 2, b32_extract(YRot, 8, 8))
 					b_writeu8(Buf, YBase + SzObjs * 3, b32_extract(YRot, 0, 8))
-					
+	
 					local ZBase = PosStart + 8 * SzObjs + Base
 					b_writeu8(Buf, ZBase, b32_extract(ZRot, 24, 8))
 					b_writeu8(Buf, ZBase + SzObjs, b32_extract(ZRot, 16, 8))
 					b_writeu8(Buf, ZBase + SzObjs * 2, b32_extract(ZRot, 8, 8))
 					b_writeu8(Buf, ZBase + SzObjs * 3, b32_extract(ZRot, 0, 8))
 				end
-				
+	
 				b_writeu8(Buf, Offset, 2); Offset += 1 -- Boolean ID prefix
 				for I = 1, SzObjs do
 					b_writeu8(Buf, Offset, ExistsList[I] and 1 or 0)
 					Offset += 1
 				end
-				
+	
 				return b_tostring(Buf, 0, Offset)
 			end
 		end)(),
 		["Font"] = function(Objs, Name, Func)
 			local SzObjs = #Objs
-			
+	
 			local DefaultWeight = { Value = 400 }
 			local DefaultStyle = { Value = 0 }
 			pcall(function() DefaultWeight = Enum.FontWeight.Regular end)
@@ -1687,9 +1531,9 @@ Serializer = (function()
 			local Weights = tableCreate(SzObjs)
 			local Styles = tableCreate(SzObjs)
 			local TotalSize = 0
-			
+	
 			local Reader = Func or (oldIndex and _oldIndexReader) or _fallbackReader
-			
+	
 			for I = 1, SzObjs do
 				local Val = Reader(Objs[I], Name)
 				if typeof(Val) == "EnumItem" then
@@ -1710,14 +1554,14 @@ Serializer = (function()
 						Style = DefaultStyle
 					}
 				end
-				
+	
 				local Fam = Val.Family
 				Families[I] = Fam
 				Weights[I] = Val.Weight.Value
 				Styles[I] = Val.Style.Value
 				TotalSize += 11 + #Fam
 			end
-			
+	
 			local Buf = b_create(TotalSize)
 			local Offset = 0
 			for I = 1, SzObjs do
@@ -1730,14 +1574,14 @@ Serializer = (function()
 				b_writeu32(Buf, Offset + 7 + FamLen, 0)
 				Offset += 11 + FamLen
 			end
-			
+	
 			return b_tostring(Buf)
 		end,
 		["SecurityCapabilities"] = function(Objs, Name, Func)
 			local SzObjs = #Objs
 			local Writer = BufferWriter.New(8 * SzObjs)
 			Writer:Skip(8 * SzObjs)
-			
+	
 			local GetValue
 			if Func then
 				GetValue = function(Obj, PropName)
@@ -1832,10 +1676,10 @@ Serializer = (function()
 			{Name = "PGSPhysicsSolverEnabled", ValueType = {Name = "bool"}, Special = "Func", Func = function(obj) return obj:PGSIsEnabled() end},
 			{Name = "CollisionGroups", ValueType = {Name = "string"}, Special = "Func", Func = function(obj)
 				local groupTable = {}
-				for i,v in pairs(game:GetService("PhysicsService"):GetCollisionGroups()) do
+				for i,v in game:GetService("PhysicsService"):GetCollisionGroups() do
 					groupTable[i] = v.name.."^"..v.id.."^"..v.mask
 				end
-				return table.concat(groupTable,"\\")
+				return tblconcat(groupTable,"\\")
 			end}
 		},
 		["Humanoid"] = {
@@ -1893,8 +1737,8 @@ Serializer = (function()
 	Run this in Studio command bar:
 	local list = {}
 	for i,v in pairs(game:GetDescendants()) do
-		local s,e = pcall(function() 
-			return v:IsA("UnionOperation") or v:IsA("MeshPart") 
+		local s,e = pcall(function()
+			return v:IsA("UnionOperation") or v:IsA("MeshPart")
 		end)
 		if s and e then list[#list+1] = v end
 	end
@@ -1915,7 +1759,7 @@ Serializer = (function()
 			local curClassName = curClass.Name
 			local cacheProps = saveProps[curClassName]
 			if cacheProps then
-				table.move(cacheProps,1,#cacheProps,#result+1,result)
+				tblmove(cacheProps,1,#cacheProps,#result+1,result)
 				break
 			end
 
@@ -1947,14 +1791,14 @@ Serializer = (function()
 			-- Special props may also contain alternate defs for filtered props
 			local specialProps = specialProps[curClassName]
 			if specialProps then
-				table.move(specialProps,1,#specialProps,#result+1,result)
+				tblmove(specialProps,1,#specialProps,#result+1,result)
 				count = #result+1
 			end
 
 			curClass = curClass.Superclass
 		end
 
-		table.sort(result,function(a,b) return a.Name < b.Name end)
+		tblsort(result,function(a,b) return a.Name < b.Name end)
 		return result
 	end
 
@@ -1995,7 +1839,7 @@ Serializer = (function()
 
 		-- extra measures because windows sucks
 		task.spawn(function()
-			task.wait(saveSettings.DecompileTimeout + 1) 
+			task.wait(saveSettings.DecompileTimeout + 1)
 			if not finished then
 				finished = true
 				coroutine.resume(thread, nil, "decompile failed: decompiler timed out")
@@ -2005,18 +1849,18 @@ Serializer = (function()
 		return coroutine.yield()
 	end
 
-	local function createStatusText(saveSettings)
+	local function createStatusText()
 		local StatusGui = Instance.new("ScreenGui")
-		StatusGui.Name = "SaveInstanceStatus"
+		StatusGui.Parent = (gethui and gethui()) or (cloneref and cloneref(game:GetService("CoreGui"))) or game:GetService("CoreGui")
 		StatusGui.DisplayOrder = 2000000000
-		
+	
 		pcall(function()
 			StatusGui.OnTopOfCoreBlur = true
 		end)
 
 		local TextLabel = Instance.new("TextLabel")
 		TextLabel.Name = "StatusLabel"
-		TextLabel.Text = "Initiating save operation..."
+		TextLabel.Text = "Saving Object(s), Please wait..."
 		TextLabel.BackgroundTransparency = 1
 		TextLabel.Font = Enum.Font.Code
 		TextLabel.Size = UDim2.new(1, 0, 0, 40)
@@ -2027,8 +1871,6 @@ Serializer = (function()
 		TextLabel.TextXAlignment = Enum.TextXAlignment.Center
 		TextLabel.TextYAlignment = Enum.TextYAlignment.Center
 		TextLabel.Parent = StatusGui
-		
-		StatusGui.Parent = (gethui and gethui()) or (cloneref and cloneref(game:GetService("CoreGui"))) or game:GetService("CoreGui")
 
 		local StartTime = os.clock()
 
@@ -2039,7 +1881,7 @@ Serializer = (function()
 				TextLabel.Text = ""
 			else
 				local Now = os.clock()
-				if Now - LastUpdate >= 0.1 or text:find("Saved") then
+				if Now - LastUpdate >= 0.01 or text:find("Saved") then
 					LastUpdate = Now
 					local Elapsed = Now - StartTime
 					local TimeStr = string.format("%.1fs", Elapsed)
@@ -2051,6 +1893,8 @@ Serializer = (function()
 		local function removeStatus()
 			pcall(StatusGui.Destroy, StatusGui)
 		end
+
+		task.wait(0.011311) -- to let the ui render
 
 		return {Update = updateStatus, Remove = removeStatus}
 	end
@@ -2064,7 +1908,7 @@ Serializer = (function()
 
 		if root == game and saveSettings.DecompileIgnore then
 			ignoredServices = {}
-			for i,v in pairs(saveSettings.DecompileIgnore) do
+			for i,v in saveSettings.DecompileIgnore do
 				ignoredServices[i] = game:GetService(v)
 			end
 		end
@@ -2076,13 +1920,13 @@ Serializer = (function()
 
 		if saveSettings.NilInstances and root == game and getnilinstances then
 			local nilInsts = getnilinstances()
-			table.move(nilInsts,1,#nilInsts,#objs+1,Objs)
+			tblmove(nilInsts,1,#nilInsts,#Objs+1,Objs)
 		end
 
 		for I = 1, #Objs do
 			local NextRoot = Objs[I]
 			local Descs = NextRoot:GetDescendants()
-			
+	
 			local function ProcessElement(Obj)
 				if (isa(Obj, "LocalScript") or isa(Obj, "ModuleScript") or isa(Obj, "Script")) and not checked[Obj] then
 					local Ignored = false
@@ -2113,19 +1957,26 @@ Serializer = (function()
 		local BytecodeHashCache = {}
 		local GetScriptBytecode = getscriptbytecode or get_script_bytecode
 
+		if saveSettings.SaveScriptCache and env.isfile and env.readfile and env.isfile("ScriptCache.json") then
+			local ok, decoded = pcall(service.HttpService.JSONDecode, service.HttpService, env.readfile("ScriptCache.json"))
+			if ok and type(decoded) == "table" then
+				BytecodeHashCache = decoded
+			end
+		end
+
 		local left = totalScripts
 		for I = 1, maxThreads do
 			task.spawn(function()
 				while true do
 					local NextScript = table.remove(scripts)
 					if not NextScript then break end
-					
+	
 					local ScriptName
 					pcall(function() ScriptName = NextScript:GetFullName() end)
 					if statusText then
 						statusText.Update("Decompiling " .. (ScriptName or "<unknown>") .. " (" .. (totalScripts - left + 1) .. "/" .. totalScripts .. ")")
 					end
-					
+	
 					local BytecodeHash
 					if GetScriptBytecode and hashmd5 then
 						local Ok, Bytecode = pcall(GetScriptBytecode, NextScript)
@@ -2150,6 +2001,16 @@ Serializer = (function()
 					end
 
 					local mrk = "-- Saved with DexRESerializer (https://github.com/Tesker-103/DexRecontinued/)\n\n"
+					if saveSettings.SaveBytecode and GetScriptBytecode then
+						local ok, bytecode = pcall(GetScriptBytecode, NextScript)
+						if ok and bytecode then
+							local b64 = env.encodeBase64(bytecode)
+							if b64 then
+								Source = "-- Bytecode (Base64):\n-- " .. b64 .. "\n\n" .. (Source or "")
+							end
+						end
+					end
+
 					if Source then
 						sources[NextScript] = mrk .. Source
 					else
@@ -2164,7 +2025,6 @@ Serializer = (function()
 			end)
 		end
 
-		-- Safety watchdog to avoid hanging forever
 		local decompTimeout = saveSettings.DecompileTimeout or DefaultSettings.Serializer.DecompileTimeout or 10
 		local maxWait = os.clock() + math.max(60, (decompTimeout * math.max(1, totalScripts)) / math.max(1, maxThreads) * 4)
 		while left > 0 do
@@ -2173,6 +2033,10 @@ Serializer = (function()
 				break
 			end
 			task.wait()
+		end
+
+		if saveSettings.SaveScriptCache and env.writefile then
+			pcall(env.writefile, "ScriptCache.json", service.HttpService:JSONEncode(BytecodeHashCache))
 		end
 
 		return sources
@@ -2202,7 +2066,7 @@ Serializer = (function()
 		local sharedStrings = {}
 		local filter = {}
 		local refs = {}
-		local parents = {}		
+		local parents = {}
 		local orderedInstList = {}
 		local nilBlacklist = {[game] = true}
 		local folderClasses = {["Player"] = true, ["PlayerScripts"] = true, ["PlayerGui"] = true, ["ScriptDebugger"] = true, ["Breakpoints"] = true, ["DebuggerWatch"] = true}
@@ -2211,9 +2075,8 @@ Serializer = (function()
 
 		if isTable and not root[1] then error("Empty Table") end
 
-		-- Set up filter
 		if isGame then
-			for i,v in pairs(service.Players:GetPlayers()) do
+			for i,v in service.Players:GetPlayers() do
 				if not saveSettings.SavePlayers then
 					filter[v] = true
 				end
@@ -2241,6 +2104,17 @@ Serializer = (function()
 			end
 		else
 			filename = filename:match(isGame and "%.rbxlx?$" or "%.rbxmx?$") and filename or filename .. (isGame and ".rbxl" or ".rbxm")
+		end
+
+		if saveSettings.AvoidFileOverwrite and env.isfile and env.isfile(filename) then
+			local base, ext = filename:match("^(.-)(%.[^%.]+)$")
+			base = base or filename
+			ext = ext or ""
+			local counter = 1
+			while env.isfile(filename) do
+				filename = base .. " (" .. counter .. ")" .. ext
+				counter += 1
+			end
 		end
 
 		local startB = os.clock()
@@ -2302,6 +2176,22 @@ Serializer = (function()
 				end
 			end
 
+			if saveSettings.IsolateLocalPlayer then
+				local lp = service.Players.LocalPlayer
+				if lp then
+					local LpFolder = Instance.new("Folder")
+					LpFolder.Name = "LocalPlayer"
+					nilBlacklist[LpFolder] = true
+					recur(LpFolder)
+					for _, child in lp:GetChildren() do
+						if child.ClassName == "PlayerGui" or child.ClassName == "PlayerScripts" or child.ClassName == "StarterGear" then
+							parents[child] = LpFolder
+							recur(child)
+						end
+					end
+				end
+			end
+
 			local message = readMeStart
 
 			for i, v in next, saveSettings do
@@ -2310,7 +2200,7 @@ Serializer = (function()
 					for j, k in next, v do
 						strings[#strings+1] = type(k) == "string" and ("\"" .. tostring(k) .. "\"") or tostring(v)
 					end
-					message = message .. "\t" .. tostring(i) .. " = { " .. table.concat(strings, ", ") .. " }\n"
+					message = message .. "\t" .. tostring(i) .. " = { " .. tblconcat(strings, ", ") .. " }\n"
 				elseif i ~= "_Recurse" then
 					message = message .. "\t" .. tostring(i) .. " = " .. tostring(v) .. "\n"
 				end
@@ -2378,14 +2268,14 @@ Serializer = (function()
 		local SzObjs = #Objs
 		local Writer = BufferWriter.New(4 * SzObjs)
 		Writer:Skip(4 * SzObjs)
-		
+	
 		local LastRef
 		for I = 1, SzObjs do
 			local Val = Func and Func(Objs[I], Name) or (oldIndex and oldIndex(Objs[I], Name) or Objs[I][Name])
 			local Ref = refs[Val] or -1
 			local AccRef = LastRef and (Ref - LastRef) or Ref
 			LastRef = Ref
-			
+	
 			local Transformed = AccRef < 0 and (2 * -AccRef - 1) or (2 * AccRef)
 			Writer:WriteInterleavedUInt32(0, I - 1, SzObjs, Transformed)
 		end
@@ -2404,7 +2294,7 @@ Serializer = (function()
 
 		local SzObjs = #Objs
 		local Buf = b_create(4 * SzObjs)
-		
+	
 		for I = 1, SzObjs do
 			local Content = gethiddenprop(Objs[I], Name)
 			if Content and #Content > 0 then
@@ -2413,16 +2303,16 @@ Serializer = (function()
 					Index = sharedStringCount
 					hashs[Content] = Index
 					sharedStringCount += 1
-					
+	
 					local MD5Buf = b_create(16)
 					b_writeu8(MD5Buf, 12, b32_extract(Index, 24, 8))
 					b_writeu8(MD5Buf, 13, b32_extract(Index, 16, 8))
 					b_writeu8(MD5Buf, 14, b32_extract(Index, 8, 8))
 					b_writeu8(MD5Buf, 15, b32_extract(Index, 0, 8))
-					
+	
 					sharedStrings[sharedStringCount] = {b_tostring(MD5Buf), Content}
 				end
-				
+	
 				local Base = I - 1
 				b_writeu8(Buf, Base, b32_extract(Index, 24, 8))
 				b_writeu8(Buf, Base + SzObjs, b32_extract(Index, 16, 8))
@@ -2436,8 +2326,8 @@ Serializer = (function()
 	local protectedStringHandler = function(Objs, Name, Func)
 		local SzObjs = #Objs
 		local TotalBytes = 0
-		local Values = table.create(SzObjs)
-		
+		local Values = tableCreate(SzObjs)
+	
 		for I = 1, SzObjs do
 			local Val
 			local Obj = Objs[I]
@@ -2451,7 +2341,7 @@ Serializer = (function()
 			Values[I] = Val
 			TotalBytes = TotalBytes + 4 + #Val
 		end
-		
+	
 		local Writer = BufferWriter.New(TotalBytes)
 		for I = 1, SzObjs do
 			Writer:WriteSizedStringLE(Values[I])
@@ -2463,7 +2353,7 @@ Serializer = (function()
 			local DecompressedSize = #Data
 			local CompressedSize = 0
 			local ChunkData = Data
-			
+	
 			if lz4compress then
 				local Compressed = lz4compress(Data)
 				if Compressed then
@@ -2471,13 +2361,13 @@ Serializer = (function()
 					ChunkData = Compressed
 				end
 			end
-			
+	
 			local HeaderBuf = b_create(16)
 			b_writestring(HeaderBuf, 0, Mbyte, 4)
 			b_writeu32(HeaderBuf, 4, CompressedSize)
 			b_writeu32(HeaderBuf, 8, DecompressedSize)
 			b_writeu32(HeaderBuf, 12, 0)
-			
+	
 			return b_tostring(HeaderBuf) .. ChunkData
 		end
 
@@ -2486,43 +2376,43 @@ Serializer = (function()
 		for Class, Objs in classList do
 			local IsService = API.Classes[Class] and API.Classes[Class].Tags.Service
 			local NumObjs = #Objs
-			
+	
 			local InstChunkSize = 4 + #Class + 4 + 1 + 4 + (4 * NumObjs) + (IsService and NumObjs or 0)
 			local ChunkBuf = b_create(InstChunkSize)
 			local Offset = 0
-			
+	
 			b_writeu32(ChunkBuf, Offset, TypeId); Offset += 4
 			b_writeu32(ChunkBuf, Offset, #Class); Offset += 4
 			b_writestring(ChunkBuf, Offset, Class, #Class); Offset += #Class
 			b_writeu8(ChunkBuf, Offset, IsService and 1 or 0); Offset += 1
 			b_writeu32(ChunkBuf, Offset, NumObjs); Offset += 4
-			
+	
 			local RefStart = Offset
 			Offset += 4 * NumObjs
-			
+	
 			local LastRef
 			for I = 1, NumObjs do
 				local Obj = Objs[I]
 				local Ref = refs[Obj]
 				local AccRef = LastRef and (Ref - LastRef) or Ref
 				LastRef = Ref
-				
+	
 				local Transformed = AccRef < 0 and (2 * -AccRef - 1) or (2 * AccRef)
 				local Base = RefStart + (I - 1)
-				
+	
 				b_writeu8(ChunkBuf, Base, b32_extract(Transformed, 24, 8))
 				b_writeu8(ChunkBuf, Base + NumObjs, b32_extract(Transformed, 16, 8))
 				b_writeu8(ChunkBuf, Base + NumObjs * 2, b32_extract(Transformed, 8, 8))
 				b_writeu8(ChunkBuf, Base + NumObjs * 3, b32_extract(Transformed, 0, 8))
 			end
-			
+	
 			if IsService then
 				for I = 1, NumObjs do
 					b_writeu8(ChunkBuf, Offset, 1)
 					Offset += 1
 				end
 			end
-			
+	
 			instBuf[instBufCount] = CreateChunk("INST", b_tostring(ChunkBuf))
 			instBufCount += 1
 
@@ -2607,7 +2497,7 @@ Serializer = (function()
 					local PropChunkSize = 4 + #PropName + 4 + 1 + #PropData
 					local PChunkBuf = b_create(PropChunkSize)
 					local POffset = 0
-					
+	
 					b_writeu32(PChunkBuf, POffset, TypeId); POffset += 4
 					b_writeu32(PChunkBuf, POffset, #PropName); POffset += 4
 					b_writestring(PChunkBuf, POffset, PropName, #PropName); POffset += #PropName
@@ -2628,69 +2518,69 @@ Serializer = (function()
 			local SstrBufObj = b_create(8)
 			b_writeu32(SstrBufObj, 0, 0) -- Version/Reserved
 			b_writeu32(SstrBufObj, 4, sharedStringCount)
-			
+	
 			local SstrParts = {b_tostring(SstrBufObj)}
 			for I = 1, #sharedStrings do
 				local Data = sharedStrings[I]
 				local Hash, Content = Data[1], Data[2]
-				
+	
 				local ItemBuf = b_create(16 + 4 + #Content)
 				b_writestring(ItemBuf, 0, Hash, 16)
 				b_writeu32(ItemBuf, 16, #Content)
 				b_writestring(ItemBuf, 20, Content, #Content)
-				
+	
 				SstrParts[#SstrParts + 1] = b_tostring(ItemBuf)
 			end
-			
-			sstrBuf[1] = CreateChunk("SSTR", table.concat(SstrParts))
+	
+			sstrBuf[1] = CreateChunk("SSTR", tblconcat(SstrParts))
 		end
 
 		-- Make PRNT chunk
 		local function MakePRNT()
 			local prntHeader = {"PRNT","\0\0\0\0","","\0\0\0\0"}
 			local buf = b_create(5 + 8 * instCount)
-			
+	
 			b_writeu8(buf, 0, 0)
 			b_writeu32(buf, 1, instCount)
-			
+	
 			local obj_start = 5
 			local par_start = 5 + 4 * instCount
-			
+	
 			local lastObjRef, lastParRef
 			for i = 1, instCount do
 				local obj = orderedInstList[i]
 				local ref = refs[obj]
 				local par = parents[obj]
 				local parRef = refs[par] or -1
-				
+	
 				local accObjRef = lastObjRef and (ref - lastObjRef) or ref
 				lastObjRef = ref
 				local accParRef = lastParRef and (parRef - lastParRef) or parRef
 				lastParRef = parRef
-				
+	
 				local oTrans = (accObjRef < 0 and 2 * -accObjRef - 1 or 2 * accObjRef)
 				local pTrans = (accParRef < 0 and 2 * -accParRef - 1 or 2 * accParRef)
-				
+	
 				local base = i - 1
 				b_writeu8(buf, obj_start + base, b32_extract(oTrans, 24, 8))
 				b_writeu8(buf, obj_start + base + instCount, b32_extract(oTrans, 16, 8))
 				b_writeu8(buf, obj_start + base + instCount * 2, b32_extract(oTrans, 8, 8))
 				b_writeu8(buf, obj_start + base + instCount * 3, b32_extract(oTrans, 0, 8))
-				
+	
 				b_writeu8(buf, par_start + base, b32_extract(pTrans, 24, 8))
 				b_writeu8(buf, par_start + base + instCount, b32_extract(pTrans, 16, 8))
 				b_writeu8(buf, par_start + base + instCount * 2, b32_extract(pTrans, 8, 8))
 				b_writeu8(buf, par_start + base + instCount * 3, b32_extract(pTrans, 0, 8))
 			end
-			
+	
 			local prntChunkData = b_tostring(buf)
 			prntHeader[3] = s_pack("<I4", #prntChunkData)
 			if lz4compress then
 				prntChunkData = lz4compress(prntChunkData)
 				prntHeader[2] = s_pack("<I4", #prntChunkData)
 			end
-			
-			prntBuf[1] = concat(prntHeader)
+	
+			prntBuf[1] = tblconcat(prntHeader)
 			prntBuf[2] = prntChunkData
 		end
 		MakePRNT()
@@ -2702,34 +2592,60 @@ Serializer = (function()
 		HeaderWriter:WriteInt32LE(instCount)
 		HeaderWriter:WriteUInt32LE(0)
 		HeaderWriter:WriteUInt32LE(0)
-		
+	
 		local BuiltHeader = HeaderWriter:ToString()
 		local BuiltMeta = "\77\69\84\65\36\0\0\0\34\0\0\0\0\0\0\0\240\19\1\0\0\0\18\0\0\0\69\120\112\108\105\99\105\116\65\117\116\111\74\111\105\110\116\115\4\0\0\0\116\114\117\101"
 		local BuiltEnd = "\69\78\68\0\0\0\0\0\9\0\0\0\0\0\0\0\60\47\114\111\98\108\111\120\62"
 
+		local FinalChunks = {BuiltHeader, BuiltMeta}
+		local count = 3
+
+		local SstrLen = #sstrBuf
+		if SstrLen > 0 then
+			tblmove(sstrBuf, 1, SstrLen, count, FinalChunks)
+			count = count + SstrLen
+		end
+
+		local InstLen = #instBuf
+		if InstLen > 0 then
+			tblmove(instBuf, 1, InstLen, count, FinalChunks)
+			count = count + InstLen
+		end
+
+		local PropLen = #propBuf
+		if PropLen > 0 then
+			tblmove(propBuf, 1,PropLen, count, FinalChunks)
+			count = count + PropLen
+		end
+
+		local PrntLen = #prntBuf
+		if PrntLen > 0 then
+			tblmove(prntBuf, 1, PrntLen, count, FinalChunks)
+			count = count + PrntLen
+		end
+
+		FinalChunks[count] = BuiltEnd
+		local FinalBuffer = tblconcat(FinalChunks)
+
 		if not saveSettings.Clipboard and not saveSettings.Callback then
-			local FinalBuffer = BuiltHeader .. BuiltMeta .. table.concat(sstrBuf) .. table.concat(instBuf) .. table.concat(propBuf) .. table.concat(prntBuf) .. BuiltEnd
 			env.writefile(filename, FinalBuffer)
 
 			if statusText then
-			statusText.Update("Saved to the file "..filename.." in "..string.format("%.3f", os.clock() - startB).." secs")
-			delay(5,statusText.Remove)
-		end
+				statusText.Update("Saved to the file "..filename.." in "..string.format("%.3f", os.clock() - startB).." secs")
+				delay(5,statusText.Remove)
+			end
 		else
-			local TotalData = {BuiltHeader, BuiltMeta, table.concat(sstrBuf), table.concat(instBuf), table.concat(propBuf), table.concat(prntBuf), BuiltEnd}
-			local StringifiedData = table.concat(TotalData)
-
 			if saveSettings.Clipboard then
 				if setrbxclipboard then
-					setrbxclipboard(StringifiedData)
+					setrbxclipboard(FinalBuffer)
 				end
 			elseif saveSettings.Callback and type(saveSettings.Callback) == "function" then
-				task.spawn(saveSettings.Callback, StringifiedData)
+				task.spawn(saveSettings.Callback, FinalBuffer)
 			end
 		end
 	end
 
-		
+	
 
 	local function serializeXML(root,filename,saveSettings)
 		local isGame = root == game
@@ -2747,6 +2663,17 @@ Serializer = (function()
 			end
 		else
 			filename = filename:match(isGame and "%.rbxlx?$" or "%.rbxmx?$") and filename or filename .. (isGame and ".rbxlx" or ".rbxmx")
+		end
+
+		if saveSettings.AvoidFileOverwrite and env.isfile and env.isfile(filename) then
+			local base, ext = filename:match("^(.-)(%.[^%.]+)$")
+			base = base or filename
+			ext = ext or ""
+			local counter = 1
+			while env.isfile(filename) do
+				filename = base .. " (" .. counter .. ")" .. ext
+				counter += 1
+			end
 		end
 
 		env.writefile(filename,"")
@@ -2785,7 +2712,7 @@ Serializer = (function()
 			folderClasses["StarterPlayerScripts"] = true
 		end
 
-		local OutputArray = table.create(100000)
+		local OutputArray = tableCreate(100000)
 		OutputArray[1] = '<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4">\n<Meta name="ExplicitAutoJoints">true</Meta>\n<External>null</External>\n<External>nil</External>'
 		local OutCount = 2
 
@@ -2899,6 +2826,22 @@ Serializer = (function()
 					recur(obj)
 				end
 			end
+	
+			if saveSettings.IsolateLocalPlayer then
+				local lp = service.Players.LocalPlayer
+				if lp then
+					local LpFolder = Instance.new("Folder")
+					LpFolder.Name = "LocalPlayer"
+					nilBlacklist[LpFolder] = true
+					recur(LpFolder)
+					for _, child in lp:GetChildren() do
+						if child.ClassName == "PlayerGui" or child.ClassName == "PlayerScripts" or child.ClassName == "StarterGear" then
+							parents[child] = LpFolder
+							recur(child)
+						end
+					end
+				end
+			end
 
 			local message = readMeStart
 
@@ -2908,7 +2851,7 @@ Serializer = (function()
 					for j, k in next, v do
 						strings[#strings+1] = type(k) == "string" and ("\"" .. tostring(k) .. "\"") or tostring(v)
 					end
-					message = message .. "\t" .. tostring(i) .. " = { " .. table.concat(strings, ", ") .. " }\n"
+					message = message .. "\t" .. tostring(i) .. " = { " .. tblconcat(strings, ", ") .. " }\n"
 				elseif i ~= "_Recurse" then
 					message = message .. "\t" .. tostring(i) .. " = " .. tostring(v) .. "\n"
 				end
@@ -2983,9 +2926,9 @@ Serializer = (function()
 		end
 
 		OutputArray[OutCount] = "\n</SharedStrings>\n</roblox>"
-		
-		env.writefile(filename, table.concat(OutputArray))
-		
+	
+		env.writefile(filename, tblconcat(OutputArray))
+	
 		table.clear(OutputArray)
 		table.clear(hashs)
 		table.clear(sharedStrings)
@@ -2999,26 +2942,28 @@ Serializer = (function()
 	Serializer.SaveInstance = function(root,filename,opts)
 		if not gameId then gameId = game.GameId end
 		local saveSettings = {}
-		for set,val in pairs(Settings.Serializer) do
+		for set,val in Settings.Serializer do
 			if opts and opts[set] ~= nil then
 				saveSettings[set] = opts[set]
 			else
 				saveSettings[set] = val
 			end
 		end
+		if not filename or filename == "" then
+			filename = saveSettings.FilePath
+		end
 		if saveSettings.DecompileMode and saveSettings.DecompileMode > 0 then saveSettings.Decompile = true end
 
 		-- Activate safety features
-		local antiIdleConn
 		if saveSettings.SafeMode then
-			activateSafeMode()
+			ActivateSafeMode()
 			ksscripts()
 			-- SafeMode also enables these protections
 			saveSettings.BoostFPS = true
 			saveSettings.KillAllScripts = true
 		end
-		if saveSettings.BoostFPS then boostFPS() end
-		if saveSettings.AntiIdle then startAntiIdle() end
+		if saveSettings.BoostFPS then BoostFPS() end
+		if saveSettings.AntiIdle then AntiIdle() end
 		if saveSettings.Anonymous then cleanAnonymousData(root, saveSettings) end
 
 		-- Handle different modes
@@ -3038,8 +2983,7 @@ Serializer = (function()
 		end
 
 		-- Cleanup
-		if antiIdleConn then pcall(function() antiIdleConn:Disconnect() end) end
-		-- Ensure status UI is removed if present
+		if antiAfkCon then pcall(function() antiAfkCon:Disconnect() end) end
 		if statusText and type(statusText.Remove) == "function" then
 			pcall(statusText.Remove)
 		end
@@ -3076,17 +3020,15 @@ Main = (function()
 	local Main = {}
 
 	Main.FetchAPI = function()
-		-- reflectionservice maybe
-
 		--local robloxVer = game:HttpGet("http://setup.roblox.com/versionQTStudio")
 		local rawAPI
-		
+	
 		if game:GetService("RunService"):IsStudio() then
 			rawAPI = require(game.ReplicatedStorage.FullAPI)
 		else
 			rawAPI = game:HttpGet("https://raw.githubusercontent.com/MaximumADHD/Roblox-Client-Tracker/refs/heads/roblox/Full-API-Dump.json")
 		end
-		
+	
 		local api = service.HttpService:JSONDecode(rawAPI)
 		local classes,enums = {},{}
 
@@ -3100,14 +3042,14 @@ Main = (function()
 			newClass.Callbacks = {}
 			newClass.Tags = {}
 
-			if class.Tags then for c,tag in pairs(class.Tags) do newClass.Tags[tag] = true end end
+			if class.Tags then for c,tag in class.Tags do newClass.Tags[tag] = true end end
 
-			for __,member in pairs(class.Members) do
+			for __,member in class.Members do
 				local newMember = {}
 				newMember.Name = member.Name
 				newMember.Class = class.Name
 				newMember.Tags = {}
-				if member.Tags then for c,tag in pairs(member.Tags) do newMember.Tags[tag] = true end end
+				if member.Tags then for c,tag in member.Tags do newMember.Tags[tag] = true end end
 
 				local mType = member.MemberType
 				if mType == "Property" then
@@ -3115,8 +3057,7 @@ Main = (function()
 					if type(vt) == "string" then
 						vt = { Name = vt }
 					elseif type(vt) == "table" and vt.Name == nil then
-						-- Attempt to extract a name-like field if present
-						for k,v in pairs(vt) do
+						for k,v in vt do
 							if type(v) == "string" then vt.Name = v; break end
 						end
 					end
@@ -3127,13 +3068,13 @@ Main = (function()
 				elseif mType == "Function" then
 					newMember.Parameters = {}
 					newMember.ReturnType = member.ReturnType.Name
-					for c,param in pairs(member.Parameters) do
+					for c,param in member.Parameters do
 						table.insert(newMember.Parameters,{Name = param.Name, Type = param.Type.Name})
 					end
 					table.insert(newClass.Functions,newMember)
 				elseif mType == "Event" then
 					newMember.Parameters = {}
-					for c,param in pairs(member.Parameters) do
+					for c,param in member.Parameters do
 						table.insert(newMember.Parameters,{Name = param.Name, Type = param.Type.Name})
 					end
 					table.insert(newClass.Events,newMember)
@@ -3143,14 +3084,14 @@ Main = (function()
 			classes[class.Name] = newClass
 		end
 
-		for _,enum in pairs(api.Enums) do
+		for _,enum in api.Enums do
 			local newEnum = {}
 			newEnum.Name = enum.Name
 			newEnum.Items = {}
 			newEnum.Tags = {}
 
-			if enum.Tags then for c,tag in pairs(enum.Tags) do newEnum.Tags[tag] = true end end
-			for __,item in pairs(enum.Items) do
+			if enum.Tags then for c,tag in enum.Tags do newEnum.Tags[tag] = true end end
+			for __,item in enum.Items do
 				local newItem = {}
 				newItem.Name = item.Name
 				newItem.Value = item.Value
@@ -3166,7 +3107,7 @@ Main = (function()
 
 			local currentClass = classes[class]
 			while currentClass do
-				for _,entry in pairs(currentClass[member]) do
+				for _,entry in currentClass[member] do
 					result[#result+1] = entry
 				end
 				currentClass = currentClass.Superclass
@@ -3186,7 +3127,7 @@ Main = (function()
 	Main.ResetSettings = function()
 		local function recur(t)
 			local res = {}
-			for set,val in pairs(t) do
+			for set,val in t do
 				if type(val) == "table" and val._Recurse then
 					res[set] = recur(val)
 				else
@@ -3212,8 +3153,10 @@ return {
 		env = {}
 		env.writefile = writefile
 		env.appendfile = appendfile
+		env.readfile = readfile or read_file
+		env.isfile = isfile or is_file
 		env.getnilinstances = getnilinstances or get_nil_instances
-		env.gethiddenprop = gethiddenprop or gethiddenproperty
+		env.gethiddenprop = gethiddenproperty or gethiddenprop
 		env.getnspval = getnspval
 		env.getbspval = getbspval
 		env.getpcd = getpcd or getpcdprop
