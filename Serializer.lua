@@ -16,7 +16,7 @@ Made in preparation for The Augur's reign that started in July 2021
 
 Many ServerScriptService and ServerStorage models of top games were saved with top accuracy
 
-Fixed & Improved for DexRE, Originally made by Moon
+Fixed & Improved for DexRE by Tesker103, Originally made by Moon
 
 ]]
 
@@ -215,7 +215,7 @@ DefaultSettings = {
 		IgnoreDefaultProps = true,
 		IgnoreNotArchivable = true,
 		-- Output & Formatting
-		Binary = true,
+		Binary = true, -- XML Serialization is broken and i dont plan to fix it
 		ShowStatus = true,
 		ReadMe = true,
 		Mode = "full",
@@ -634,11 +634,25 @@ Serializer = (function()
 		},
 	}
 
-
-	local propFilter = {
+--[[
 		["WeldConstraint"] = {
 		["Part0Internal"] = true,
 		["Part1Internal"] = true
+		},
+]]
+
+
+	local propFilter = {
+		["AudioEmitter"] = {
+			["DistanceAttenuation"] = true,
+			["AngleAttenuation"] = true,
+		},
+		["AudioListener"] = {
+			["DistanceAttenuation"] = true,
+			["AngleAttenuation"] = true,
+		},
+		["Folder"] = {
+			["IconTint"] = true
 		},
 
 		["BasePart"] = {
@@ -911,12 +925,12 @@ Serializer = (function()
 			return b_tostring(buf)
 		end,
 		["BinaryString"] = function(objs,name,func)
-			if not getbspval then return end
+			if not func and not getbspval then return end
 			local szObjs = #objs
 			local totalSize = 0
 			local vals = tableCreate(szObjs)
 			for i = 1, szObjs do
-				local val = getbspval(objs[i], name) or ""
+				local val = func and func(objs[i], name) or (getbspval and getbspval(objs[i], name)) or ""
 				vals[i] = val
 				totalSize = totalSize + 4 + #val
 			end
@@ -1605,7 +1619,7 @@ Serializer = (function()
 				local BitsCount = 0
 				if Val then
 					local ValStr = tostring(Val)
-					for _, Flag in next, string.split(ValStr, " | ") do
+					for _, Flag in string.split(ValStr, " | ") do
 						local Bit = CAPABILITY_BITS[Flag]
 						if Bit then
 							BitsCount = BitsCount + Bit
@@ -1618,7 +1632,62 @@ Serializer = (function()
 		end,
 	}
 
+
+	local ScratchKeys = tableCreate(16)
+	local ScratchCurveBuf = b_create(256)
+
+	local function PackAttenuationCurve(curve)
+		if not curve or next(curve) == nil then
+			return "\0"
+		end
+
+		local count = 0
+		for k in curve do
+			count += 1
+			ScratchKeys[count] = k
+		end
+
+		if count > 1 then
+			tblsort(ScratchKeys)
+		end
+
+		local NeededBytes = 1 + count * 8
+		if NeededBytes > buffer.len(ScratchCurveBuf) then
+			ScratchCurveBuf = b_create(NeededBytes * 2)
+		end
+
+		b_writeu8(ScratchCurveBuf, 0, 0) -- Version byte
+		local offset = 1
+		for i = 1, count do
+			local k = ScratchKeys[i]
+			b_writef32(ScratchCurveBuf, offset, k)
+			b_writef32(ScratchCurveBuf, offset + 4, curve[k])
+			offset += 8
+		end
+
+		table.clear(ScratchKeys)
+		return b_readstring(ScratchCurveBuf, 0, NeededBytes)
+	end
+
+	local function SerializeDistanceAttenuation(obj)
+		local ok, curve = pcall(obj.GetDistanceAttenuation, obj)
+		return (ok and curve) and PackAttenuationCurve(curve) or "\0"
+	end
+
+	local function SerializeAngleAttenuation(obj)
+		local ok, curve = pcall(obj.GetAngleAttenuation, obj)
+		return (ok and curve) and PackAttenuationCurve(curve) or "\0"
+	end
+
 	local specialProps = {
+		["AudioEmitter"] = {
+			{Name = "DistanceAttenuation", ValueType = {Name = "BinaryString", Category = "DataType"}, Special = "Func", Func = SerializeDistanceAttenuation},
+			{Name = "AngleAttenuation", ValueType = {Name = "BinaryString", Category = "DataType"}, Special = "Func", Func = SerializeAngleAttenuation},
+		},
+		["AudioListener"] = {
+			{Name = "DistanceAttenuation", ValueType = {Name = "BinaryString", Category = "DataType"}, Special = "Func", Func = SerializeDistanceAttenuation},
+			{Name = "AngleAttenuation", ValueType = {Name = "BinaryString", Category = "DataType"}, Special = "Func", Func = SerializeAngleAttenuation},
+		},
 		["Script"] = {
 			{Name = "Source", ValueType = {Name = "ProtectedString", Category = "DataType"}, Special = "Decompile"}
 		},
@@ -1632,6 +1701,10 @@ Serializer = (function()
 		["Model"] = { -- TODO: OptionalCoordinateFrame support for gethiddenprop
 			{Name = "WorldPivotData", ValueType = {Name = "OptionalCoordinateFrame", Category = "DataType"}, IndexName = "WorldPivot"},
 		},
+["WeldConstraint"] = {
+        {Name = "Part0Internal", ValueType = {Name = "Instance", Category = "Class"}, IndexName = "Part0"},
+        {Name = "Part1Internal", ValueType = {Name = "Instance", Category = "Class"}, IndexName = "Part1"}
+    },
 	}
 
 	--[[
@@ -2194,10 +2267,10 @@ Serializer = (function()
 
 			local message = readMeStart
 
-			for i, v in next, saveSettings do
+			for i, v in saveSettings do
 				if type(v) == "table" then -- assume array
 					local strings = {}
-					for j, k in next, v do
+					for j, k in v do
 						strings[#strings+1] = type(k) == "string" and ("\"" .. tostring(k) .. "\"") or tostring(v)
 					end
 					message = message .. "\t" .. tostring(i) .. " = { " .. tblconcat(strings, ", ") .. " }\n"
@@ -2744,20 +2817,24 @@ Serializer = (function()
 				local PropVal
 
 				local Special = Prop.Special
+				local PropType = Prop.ValueType.Name
+
 				if Special then
 					if Special == "NotScriptable" then
-						PropVal = getnspval and getnspval(obj,IndexName)
+						local s, res = pcall(getnspval, obj, IndexName)
+						if s then PropVal = res end
 					elseif Special == "BinaryString" then
-						PropVal = getbspval and getbspval(obj,IndexName,true)
+						local s, res = pcall(getbspval, obj, IndexName, true)
+						if s then PropVal = res end
 					elseif Special == "SharedString" and gethiddenprop and hashmd5 then
-						local Content = gethiddenprop(obj,IndexName)
-						if Content and #Content > 0 then
+						local s, Content = pcall(gethiddenprop, obj, IndexName)
+						if s and Content and #Content > 0 then
 							local Hash = hashs[Content]
 							if not Hash then
 								local RawHash = hashmd5(Content)
 								local NewHash = ""
-								for j = 1,#RawHash,2 do
-									NewHash = NewHash..string.char(tonumber(RawHash:sub(j,j+1),16))
+								for j = 1, #RawHash, 2 do
+									NewHash = NewHash .. string.char(tonumber(RawHash:sub(j, j + 1), 16))
 								end
 								Hash = encodeBase64(NewHash)
 								hashs[Content] = Hash
@@ -2769,7 +2846,8 @@ Serializer = (function()
 							PropVal = Hash
 						end
 					elseif Special == "Func" then
-						PropVal = Prop.Func(obj)
+						local s, res = pcall(Prop.Func, obj)
+						if s then PropVal = res end
 					elseif Special == "Decompile" then
 						if sources[obj] then
 							PropVal = sources[obj]
@@ -2779,8 +2857,19 @@ Serializer = (function()
 							PropVal = "-- Script failed to decompile or ignored"
 						end
 					end
+				elseif Prop.Tags and Prop.Tags.NotScriptable then
+					if PropType == "BinaryString" then
+						local s, res = pcall(getbspval, obj, IndexName, true)
+						if s then PropVal = res end
+					else
+						local s, res = pcall(getnspval, obj, IndexName)
+						if s then PropVal = res end
+					end
 				else
-					if oldIndex then PropVal = oldIndex(obj,IndexName) else PropVal = obj[IndexName] end
+					local s, res = pcall(function()
+						return oldIndex and oldIndex(obj, IndexName) or obj[IndexName]
+					end)
+					if s then PropVal = res end
 				end
 
 				if testInst[IndexName] ~= PropVal or (savingDefaultProps and PropVal ~= nil) then
@@ -2845,10 +2934,10 @@ Serializer = (function()
 
 			local message = readMeStart
 
-			for i, v in next, saveSettings do
+			for i, v in saveSettings do
 				if type(v) == "table" then
 					local strings = {}
-					for j, k in next, v do
+					for j, k in v do
 						strings[#strings+1] = type(k) == "string" and ("\"" .. tostring(k) .. "\"") or tostring(v)
 					end
 					message = message .. "\t" .. tostring(i) .. " = { " .. tblconcat(strings, ", ") .. " }\n"
