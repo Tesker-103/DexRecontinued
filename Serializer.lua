@@ -656,7 +656,10 @@ Serializer = (function()
 		["Folder"] = {
 			["IconTint"] = true
 		},
-
+		["WeldConstraint"] = {
+			["Part0Internal"] = true,
+			["Part1Internal"] = true
+		},
 		["BasePart"] = {
 			["Color3uint8"] = true
 		},
