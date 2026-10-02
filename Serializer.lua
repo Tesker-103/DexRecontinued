@@ -233,6 +233,8 @@ DefaultSettings = {
 	}
 }
 
+local decompile = serializerfallback or decompile
+
 do
 	if not table.clear then
 		table.clear = function(t)
